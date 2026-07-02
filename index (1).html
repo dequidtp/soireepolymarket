@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>La Bourse des Potes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --bg: #0f2419;
+    --bg-alt: #163526;
+    --baize: #1c3f2c;
+    --paper: #f4ecd8;
+    --paper-dim: #e7dcc0;
+    --ink: #1c1a12;
+    --ink-soft: #5a5342;
+    --red: #b3382c;
+    --red-dark: #8e2b21;
+    --gold: #d3a24a;
+    --green-ok: #3f6b46;
+    --line: rgba(28,26,18,0.18);
+    --radius: 2px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(ellipse at top, #1a3d29 0%, var(--bg) 60%);
+    color: var(--paper);
+    font-family:'IBM Plex Mono', monospace;
+    min-height:100vh;
+    padding-bottom:80px;
+  }
+  ::selection{background:var(--gold); color:var(--ink);}
+
+  /* felt texture stripes */
+  .felt{
+    background-image: repeating-linear-gradient(115deg, rgba(255,255,255,0.015) 0px, rgba(255,255,255,0.015) 2px, transparent 2px, transparent 6px);
+  }
+
+  header{
+    padding: 28px 20px 22px;
+    text-align:center;
+    border-bottom: 1px solid rgba(211,162,74,0.25);
+    position:relative;
+  }
+  header .eyebrow{
+    font-size:11px;
+    letter-spacing:0.28em;
+    color: var(--gold);
+    text-transform:uppercase;
+    margin-bottom:6px;
+  }
+  header h1{
+    font-family:'Bebas Neue', sans-serif;
+    font-size: clamp(38px, 8vw, 64px);
+    letter-spacing: 0.04em;
+    margin: 0;
+    color: var(--paper);
+    line-height:0.95;
+  }
+  header h1 span{ color: var(--gold); }
+  header .sub{
+    font-size:12.5px;
+    color: rgba(244,236,216,0.55);
+    margin-top:8px;
+    max-width:480px;
+    margin-left:auto;
+    margin-right:auto;
+  }
+
+  .wrap{ max-width: 640px; margin: 0 auto; padding: 0 16px; }
+
+  /* ---- identity bar ---- */
+  .idbar{
+    display:flex; align-items:center; justify-content:space-between;
+    gap:10px; margin-top:18px; padding:14px 16px;
+    background: rgba(0,0,0,0.18);
+    border:1px solid rgba(211,162,74,0.2);
+    border-radius: var(--radius);
+    flex-wrap:wrap;
+  }
+  .idbar .who{ font-size:13px; }
+  .idbar .who b{ color: var(--gold); font-size:15px; }
+  .idbar select, .idbar button, .idbar input{
+    font-family:inherit; font-size:13px;
+  }
+  select#playerSelect{
+    background: var(--bg-alt); color: var(--paper); border:1px solid rgba(211,162,74,0.35);
+    padding:7px 10px; border-radius: var(--radius);
+  }
+  .balances{ display:flex; gap:16px; font-size:11px; text-align:center; }
+  .balances div b{ display:block; font-family:'Bebas Neue',sans-serif; font-size:20px; letter-spacing:0.03em; color: var(--paper); }
+  .balances .dispo b{ color:#8fd19e; }
+  .balances .engage b{ color: var(--gold); }
+
+  .btn{
+    background: var(--red); color: var(--paper);
+    border:none; padding:9px 16px; border-radius: var(--radius);
+    font-family:'IBM Plex Mono', monospace; font-weight:600; font-size:12.5px;
+    letter-spacing:0.03em; cursor:pointer; text-transform:uppercase;
+    transition: transform .08s ease, background .15s ease;
+  }
+  .btn:hover{ background: var(--red-dark); }
+  .btn:active{ transform: translateY(1px); }
+  .btn.ghost{ background:transparent; border:1px solid rgba(244,236,216,0.35); color:var(--paper); }
+  .btn.ghost:hover{ background: rgba(244,236,216,0.08); }
+  .btn.gold{ background: var(--gold); color: var(--ink); }
+  .btn.gold:hover{ background:#e0b25f; }
+  .btn:disabled{ opacity:0.35; cursor:not-allowed; }
+  .btn.small{ padding:6px 11px; font-size:11px; }
+  .btn.full{ width:100%; }
+
+  /* ---- tabs ---- */
+  nav.tabs{
+    display:flex; gap:2px; margin:18px 0 16px; overflow-x:auto;
+    border-bottom: 1px solid rgba(211,162,74,0.2);
+  }
+  nav.tabs button{
+    background:none; border:none; color: rgba(244,236,216,0.5);
+    font-family:'IBM Plex Mono', monospace; font-size:11.5px; letter-spacing:0.04em;
+    text-transform:uppercase; padding:10px 12px; cursor:pointer; white-space:nowrap;
+    border-bottom:2px solid transparent;
+  }
+  nav.tabs button.active{ color: var(--gold); border-bottom-color: var(--gold); }
+  nav.tabs button .count{
+    display:inline-block; margin-left:5px; background:rgba(211,162,74,0.2); color:var(--gold);
+    border-radius:8px; padding:1px 6px; font-size:10px;
+  }
+
+  section.panel{ display:none; }
+  section.panel.active{ display:block; }
+
+  .empty{
+    text-align:center; padding: 40px 20px; color: rgba(244,236,216,0.4); font-size:12.5px;
+    border:1px dashed rgba(244,236,216,0.2); border-radius:var(--radius);
+  }
+
+  /* ---- ticket card (signature element) ---- */
+  .ticket{
+    background: var(--paper); color: var(--ink);
+    border-radius: 3px; margin-bottom:18px; position:relative;
+    box-shadow: 0 10px 24px rgba(0,0,0,0.28);
+    overflow:hidden;
+  }
+  .ticket .t-head{
+    padding:14px 16px 10px; display:flex; justify-content:space-between; align-items:flex-start; gap:10px;
+  }
+  .ticket .t-head .desc{ font-size:14px; font-weight:600; line-height:1.35; }
+  .ticket .t-head .status{
+    font-size:9.5px; text-transform:uppercase; letter-spacing:0.05em;
+    padding:3px 7px; border-radius:10px; white-space:nowrap; font-weight:700;
+  }
+  .st-ouvert{ background:#e3ecd9; color:#3f6b46; }
+  .st-attente_validation{ background:#f6e2c0; color:#8a5a1c; }
+  .st-verrouille{ background:#dbe6ee; color:#2c5478; }
+  .st-a_juger{ background:#efd8db; color:#8e2b21; }
+  .st-resolu{ background:#e2e2e2; color:#555; }
+  .st-refuse, .st-annule{ background:#eee; color:#999; }
+
+  .t-meta{ padding: 0 16px 10px; font-size:10.5px; color: var(--ink-soft); }
+
+  .perf{
+    position:relative; height:1px; margin: 0 0;
+    border-top: 1.5px dashed rgba(28,26,18,0.28);
+  }
+  .perf::before, .perf::after{
+    content:''; position:absolute; top:-7px; width:14px; height:14px; border-radius:50%;
+    background: var(--bg);
+  }
+  .perf::before{ left:-7px; }
+  .perf::after{ right:-7px; }
+
+  .t-body{ padding: 14px 16px 16px; display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+  .sides{ flex:1; min-width:180px; display:flex; flex-direction:column; gap:6px; font-size:12px; }
+  .side-row{ display:flex; justify-content:space-between; gap:10px; }
+  .side-row .lbl{ color: var(--ink-soft); }
+  .side-row .stake{ font-weight:700; }
+  .odds-badge{
+    font-family:'Bebas Neue', sans-serif; font-size:30px; letter-spacing:0.02em;
+    background: var(--ink); color: var(--gold); padding:6px 14px; border-radius:2px;
+    line-height:1; text-align:center;
+  }
+  .odds-badge small{ display:block; font-family:'IBM Plex Mono',monospace; font-size:8.5px; letter-spacing:0.08em; color:rgba(244,236,216,0.6); margin-top:2px;}
+
+  .t-actions{ padding: 0 16px 16px; display:flex; gap:8px; flex-wrap:wrap; }
+  .t-actions .btn{ flex:1; min-width:120px; }
+
+  .countdown{ font-size:10.5px; color: var(--red-dark); font-weight:600; }
+
+  /* form */
+  .form-card{
+    background: var(--paper); color: var(--ink); border-radius:3px; padding:18px 18px 20px;
+    box-shadow: 0 10px 24px rgba(0,0,0,0.28);
+  }
+  .form-card h3{ font-family:'Bebas Neue',sans-serif; font-size:22px; letter-spacing:0.03em; margin:0 0 4px; }
+  .form-card .hint{ font-size:11px; color: var(--ink-soft); margin-bottom:14px; }
+  .field{ margin-bottom:12px; }
+  .field label{ display:block; font-size:10.5px; text-transform:uppercase; letter-spacing:0.05em; color: var(--ink-soft); margin-bottom:4px; }
+  .field input, .field textarea{
+    width:100%; font-family:'IBM Plex Mono',monospace; font-size:13px;
+    padding:9px 10px; border:1px solid rgba(28,26,18,0.25); border-radius:2px; background:#fff;
+    color: var(--ink);
+  }
+  .field textarea{ resize:vertical; min-height:52px; }
+  .row2{ display:flex; gap:10px; }
+  .row2 .field{ flex:1; }
+  .preview-box{
+    margin-top:10px; padding:10px 12px; background: rgba(28,26,18,0.05);
+    border-radius:2px; font-size:11.5px; color: var(--ink-soft);
+  }
+
+  .leaderboard{ list-style:none; padding:0; margin:0; }
+  .leaderboard li{
+    display:flex; align-items:center; gap:12px; padding:11px 14px; margin-bottom:8px;
+    background: rgba(0,0,0,0.18); border:1px solid rgba(211,162,74,0.15); border-radius:2px;
+  }
+  .leaderboard .rank{ font-family:'Bebas Neue',sans-serif; font-size:20px; color: var(--gold); width:28px; }
+  .leaderboard .name{ flex:1; font-size:13px; }
+  .leaderboard .bal{ font-weight:700; font-size:13px; }
+  .leaderboard li.me{ border-color: var(--gold); }
+
+  .jury-pill{
+    display:inline-block; background: rgba(211,162,74,0.15); color: var(--gold);
+    font-size:10px; padding:2px 8px; border-radius:8px; margin-top:6px;
+  }
+
+  .toast{
+    position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
+    background: var(--ink); color: var(--paper); padding:11px 18px; border-radius:3px;
+    font-size:12.5px; box-shadow:0 8px 20px rgba(0,0,0,0.4); z-index:999;
+    opacity:0; pointer-events:none; transition: opacity .2s ease, transform .2s ease;
+  }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+  .gate{ max-width:480px; margin:60px auto; padding:24px; background:var(--paper); color:var(--ink); border-radius:3px; }
+  .gate h2{ font-family:'Bebas Neue',sans-serif; font-size:26px; margin-top:0; }
+  .gate code{ background:rgba(28,26,18,0.08); padding:2px 5px; border-radius:2px; font-size:11px; }
+  .gate ol{ font-size:13px; line-height:1.6; padding-left:20px; }
+
+  footer{ text-align:center; font-size:10.5px; color: rgba(244,236,216,0.3); margin-top:30px; }
+</style>
+</head>
+<body class="felt">
+
+<div id="gate" style="display:none" class="gate"></div>
+
+<div id="app" style="display:none">
+  <header>
+    <div class="eyebrow">Jetons fictifs · Aucun argent réel</div>
+    <h1>LA BOURSE <span>DES POTES</span></h1>
+    <div class="sub">Chacun démarre avec 1000 jetons. On propose, on prend, et trois jurés tirés au sort tranchent quand ça part en embrouille.</div>
+  </header>
+
+  <div class="wrap">
+    <div class="idbar">
+      <div class="who" id="whoBox"></div>
+      <div class="balances" id="balBox" style="display:none">
+        <div class="dispo"><b id="balDispo">0</b>disponible</div>
+        <div class="engage"><b id="balEngage">0</b>engagé</div>
+      </div>
+    </div>
+
+    <nav class="tabs" id="tabs">
+      <button data-tab="ouverts" class="active">Marchés ouverts <span class="count" id="cnt-ouverts"></span></button>
+      <button data-tab="mesparis">Mes paris <span class="count" id="cnt-mesparis"></span></button>
+      <button data-tab="jury">À juger <span class="count" id="cnt-jury"></span></button>
+      <button data-tab="classement">Classement</button>
+      <button data-tab="nouveau">+ Nouveau pari</button>
+    </nav>
+
+    <section class="panel active" id="panel-ouverts"></section>
+    <section class="panel" id="panel-mesparis"></section>
+    <section class="panel" id="panel-jury"></section>
+    <section class="panel" id="panel-classement"></section>
+    <section class="panel" id="panel-nouveau"></section>
+  </div>
+
+  <footer>La Bourse des Potes — pas d'argent réel, juste de la mauvaise foi.</footer>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   CONFIG — remplis avec ton projet Supabase
+   ============================================================ */
+const SUPABASE_URL = "REPLACE_WITH_SUPABASE_URL";
+const SUPABASE_ANON_KEY = "REPLACE_WITH_SUPABASE_ANON_KEY";
+const STARTING_BALANCE = 1000;
+
+let sb = null;
+let me = null;          // participant courant {id,name,balance}
+let participants = [];
+let bets = [];
+let juryRows = [];
+
+const $ = (sel, root=document) => root.querySelector(sel);
+const $$ = (sel, root=document) => [...root.querySelectorAll(sel)];
+
+function toast(msg){
+  const t = $('#toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(()=>t.classList.remove('show'), 2600);
+}
+
+function fmt(n){ return new Intl.NumberFormat('fr-FR').format(n); }
+
+/* ---------- boot ---------- */
+(function init(){
+  if (SUPABASE_URL.startsWith("REPLACE_") || SUPABASE_ANON_KEY.startsWith("REPLACE_")) {
+    showGate();
+    return;
+  }
+  sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  $('#app').style.display = 'block';
+  loadPlayerFromStorage();
+  wireTabs();
+  refreshAll();
+  setInterval(refreshAll, 15000); // rafraîchit toutes les 15s
+})();
+
+function showGate(){
+  $('#gate').style.display = 'block';
+  $('#gate').innerHTML = `
+    <h2>Configuration requise</h2>
+    <p>Cette page a besoin d'un projet Supabase pour stocker les joueurs, les paris et le jury.</p>
+    <ol>
+      <li>Crée un projet sur <code>supabase.com</code></li>
+      <li>Dans le SQL Editor, exécute le fichier <code>schema.sql</code> fourni</li>
+      <li>Récupère l'URL et la clé <code>anon</code> du projet (Project Settings → API)</li>
+      <li>Remplace <code>SUPABASE_URL</code> et <code>SUPABASE_ANON_KEY</code> en haut du script dans <code>index.html</code></li>
+      <li>Redéploie / recharge la page</li>
+    </ol>`;
+}
+
+/* ---------- identité (sélection de joueur, façon vivatech-tracker) ---------- */
+function loadPlayerFromStorage(){
+  const savedId = localStorage.getItem('bdp_player_id');
+  if (savedId) me = { id: savedId };
+}
+
+function renderWhoBox(){
+  const box = $('#whoBox');
+  if (!me || !me.name){
+    box.innerHTML = `
+      <select id="playerSelect"><option value="">— choisir un joueur —</option></select>
+      <input id="newName" placeholder="ou nouveau pseudo…" style="margin-left:8px; padding:7px 10px; border-radius:2px; border:1px solid rgba(211,162,74,0.35); background:var(--bg-alt); color:var(--paper);">
+      <button class="btn small gold" id="joinBtn" style="margin-left:6px;">Rejoindre</button>
+    `;
+    const sel = $('#playerSelect');
+    participants.forEach(p=>{
+      const o = document.createElement('option');
+      o.value = p.id; o.textContent = `${p.name} (${fmt(p.balance)})`;
+      sel.appendChild(o);
+    });
+    sel.onchange = ()=>{ if(sel.value){ setPlayer(sel.value); } };
+    $('#joinBtn').onclick = async ()=>{
+      const name = $('#newName').value.trim();
+      if (!name) { toast("Entre un pseudo d'abord"); return; }
+      await joinAsNewPlayer(name);
+    };
+    $('#balBox').style.display = 'none';
+  } else {
+    box.innerHTML = `Connecté en tant que <b>${me.name}</b> · <a href="#" id="switchLink" style="color:var(--gold); text-decoration:underline; cursor:pointer;">changer</a>`;
+    $('#switchLink').onclick = (e)=>{ e.preventDefault(); me = null; localStorage.removeItem('bdp_player_id'); renderWhoBox(); $('#balBox').style.display='none'; };
+    $('#balBox').style.display = 'flex';
+    const engaged = engagedAmount(me.id);
+    $('#balDispo').textContent = fmt(me.balance - engaged);
+    $('#balEngage').textContent = fmt(engaged);
+  }
+}
+
+async function joinAsNewPlayer(name){
+  const existing = participants.find(p=>p.name.toLowerCase() === name.toLowerCase());
+  if (existing){ setPlayer(existing.id); return; }
+  const { data, error } = await sb.from('participants').insert({ name, balance: STARTING_BALANCE }).select().single();
+  if (error){ toast("Erreur : " + error.message); return; }
+  participants.push(data);
+  setPlayer(data.id);
+  toast(`Bienvenue ${name}, tu démarres avec ${fmt(STARTING_BALANCE)} jetons.`);
+}
+
+function setPlayer(id){
+  localStorage.setItem('bdp_player_id', id);
+  me = participants.find(p=>p.id===id) || { id };
+  renderWhoBox();
+  renderAllPanels();
+}
+
+/* ---------- data loading ---------- */
+async function refreshAll(){
+  if (!sb) return;
+  const [{data:parts}, {data:allBets}, {data:allJury}] = await Promise.all([
+    sb.from('participants').select('*').order('balance', {ascending:false}),
+    sb.from('bets').select('*').order('created_at', {ascending:false}),
+    sb.from('jury').select('*')
+  ]);
+  participants = parts || [];
+  bets = allBets || [];
+  juryRows = allJury || [];
+
+  if (me && me.id){
+    const fresh = participants.find(p=>p.id===me.id);
+    if (fresh) me = fresh;
+  }
+
+  autoValidateExpired();
+  renderWhoBox();
+  renderAllPanels();
+}
+
+function engagedAmount(participantId){
+  let sum = 0;
+  bets.forEach(b=>{
+    if (['attente_validation','verrouille','a_juger'].includes(b.status)){
+      if (b.creator_id === participantId) sum += b.creator_stake;
+      if (b.taker_id === participantId) sum += (b.taker_stake||0);
+    }
+  });
+  return sum;
+}
+
+/* auto-validation silencieuse après 24h sans refus */
+async function autoValidateExpired(){
+  const now = new Date();
+  const toValidate = bets.filter(b => b.status === 'attente_validation' && b.accept_deadline && new Date(b.accept_deadline) < now);
+  for (const b of toValidate){
+    await sb.from('bets').update({ status: 'verrouille' }).eq('id', b.id);
+    b.status = 'verrouille';
+  }
+}
+
+/* ---------- tabs ---------- */
+function wireTabs(){
+  $$('#tabs button').forEach(btn=>{
+    btn.onclick = ()=>{
+      $$('#tabs button').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      $$('.panel').forEach(p=>p.classList.remove('active'));
+      $(`#panel-${btn.dataset.tab}`).classList.add('active');
+    };
+  });
+}
+
+/* ---------- render dispatch ---------- */
+function renderAllPanels(){
+  renderOuverts();
+  renderMesParis();
+  renderJury();
+  renderClassement();
+  renderNouveau();
+  updateCounts();
+}
+
+function updateCounts(){
+  const ouverts = bets.filter(b=>b.status==='ouvert' && (!me || b.creator_id!==me.id)).length;
+  const mine = me ? bets.filter(b=> (b.creator_id===me.id || b.taker_id===me.id) && !['ouvert'].includes(b.status)).length : 0;
+  const toJudge = me ? juryRows.filter(j=>j.juror_id===me.id && !j.voted_at).length : 0;
+  $('#cnt-ouverts').textContent = ouverts || '';
+  $('#cnt-mesparis').textContent = mine || '';
+  $('#cnt-jury').textContent = toJudge || '';
+}
+
+function participantName(id){ const p = participants.find(x=>x.id===id); return p ? p.name : '???'; }
+
+function statusLabel(s){
+  return {
+    ouvert:'Ouvert', attente_validation:'En attente', refuse:'Refusé', annule:'Annulé',
+    verrouille:'Verrouillé', a_juger:'À juger', resolu:'Résolu'
+  }[s] || s;
+}
+
+function takerStakeFor(creatorStake, cote){
+  return Math.max(1, Math.round(creatorStake / (cote - 1)));
+}
+
+/* ---------- panel: marchés ouverts ---------- */
+function renderOuverts(){
+  const el = $('#panel-ouverts');
+  const list = bets.filter(b=>b.status==='ouvert');
+  if (!list.length){ el.innerHTML = `<div class="empty">Aucun marché ouvert pour l'instant. Sois le premier à provoquer quelqu'un.</div>`; return; }
+  el.innerHTML = list.map(b=>{
+    const takerStake = takerStakeFor(b.creator_stake, b.cote);
+    const isMine = me && b.creator_id === me.id;
+    const gainIfTakerWins = b.creator_stake + takerStake;
+    return `
+    <div class="ticket">
+      <div class="t-head">
+        <div class="desc">${escapeHtml(b.description)}</div>
+        <div class="status st-${b.status}">${statusLabel(b.status)}</div>
+      </div>
+      <div class="t-meta">Proposé par <b>${participantName(b.creator_id)}</b></div>
+      <div class="perf"></div>
+      <div class="t-body">
+        <div class="sides">
+          <div class="side-row"><span class="lbl">${participantName(b.creator_id)} tient :</span><span>${escapeHtml(b.creator_side)}</span></div>
+          <div class="side-row"><span class="lbl">Camp à prendre :</span><span>${escapeHtml(b.taker_side)}</span></div>
+          <div class="side-row"><span class="lbl">Mise à engager :</span><span class="stake">${fmt(takerStake)} jetons</span></div>
+          <div class="side-row"><span class="lbl">Gain si tu gagnes :</span><span class="stake">${fmt(gainIfTakerWins)} jetons</span></div>
+        </div>
+        <div class="odds-badge">${b.cote}<small>cote</small></div>
+      </div>
+      <div class="t-actions">
+        ${isMine
+          ? `<button class="btn ghost full" onclick="cancelBet('${b.id}')">Retirer mon marché</button>`
+          : `<button class="btn full" onclick="takeBet('${b.id}')" ${!me?'disabled':''}>Prendre ce pari</button>`
+        }
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ---------- panel: mes paris ---------- */
+function renderMesParis(){
+  const el = $('#panel-mesparis');
+  if (!me || !me.id){ el.innerHTML = `<div class="empty">Choisis d'abord ton pseudo en haut de page.</div>`; return; }
+  const mine = bets.filter(b=> b.creator_id===me.id || b.taker_id===me.id).filter(b=>b.status!=='ouvert' || b.creator_id===me.id);
+  const relevant = bets.filter(b=> (b.creator_id===me.id || b.taker_id===me.id));
+  if (!relevant.length){ el.innerHTML = `<div class="empty">Tu n'as ni proposé ni pris de pari pour l'instant.</div>`; return; }
+  el.innerHTML = relevant.map(b=>{
+    const iAmCreator = b.creator_id === me.id;
+    const takerStake = b.taker_stake ?? takerStakeFor(b.creator_stake, b.cote);
+    let actions = '';
+    if (b.status === 'attente_validation' && iAmCreator){
+      const hrsLeft = Math.max(0, Math.round((new Date(b.accept_deadline) - new Date())/3600000));
+      actions = `
+        <div class="countdown" style="width:100%; margin-bottom:6px;">Il te reste ~${hrsLeft}h pour te rétracter</div>
+        <button class="btn full" onclick="validateBet('${b.id}')">Valider le pari</button>
+        <button class="btn ghost full" onclick="refuseBet('${b.id}')">Refuser (annuler)</button>`;
+    } else if (b.status === 'attente_validation' && !iAmCreator){
+      actions = `<div class="countdown" style="width:100%;">En attente de validation par ${participantName(b.creator_id)} (24h)</div>`;
+    } else if (b.status === 'verrouille'){
+      actions = `<button class="btn gold full" onclick="requestResolution('${b.id}')">Demander la résolution</button>`;
+    } else if (b.status === 'a_juger'){
+      const votes = juryRows.filter(j=>j.bet_id===b.id);
+      const done = votes.filter(j=>j.voted_at).length;
+      actions = `<div class="jury-pill">Jury : ${done}/3 votes rendus</div>`;
+    } else if (b.status === 'resolu'){
+      const won = b.resolution_outcome === (iAmCreator ? 'createur' : 'preneur');
+      actions = `<div class="jury-pill" style="background:${won?'rgba(63,107,70,0.2)':'rgba(179,56,44,0.15)'}; color:${won?'#8fd19e':'#e08a7c'};">${won ? 'Gagné' : 'Perdu'} — issue : ${b.resolution_outcome === 'createur' ? escapeHtml(b.creator_side) : escapeHtml(b.taker_side)}</div>`;
+    } else if (['refuse','annule'].includes(b.status)){
+      actions = `<div class="jury-pill">Pari clos sans suite</div>`;
+    } else if (b.status === 'ouvert'){
+      actions = `<button class="btn ghost full" onclick="cancelBet('${b.id}')">Retirer ce marché</button>`;
+    }
+    return `
+    <div class="ticket">
+      <div class="t-head">
+        <div class="desc">${escapeHtml(b.description)}</div>
+        <div class="status st-${b.status}">${statusLabel(b.status)}</div>
+      </div>
+      <div class="t-meta">${iAmCreator ? 'Toi (proposeur)' : `Proposé par ${participantName(b.creator_id)}`} vs ${b.taker_id ? (iAmCreator ? participantName(b.taker_id) : 'toi (preneur)') : '—'}</div>
+      <div class="perf"></div>
+      <div class="t-body">
+        <div class="sides">
+          <div class="side-row"><span class="lbl">${participantName(b.creator_id)} :</span><span>${escapeHtml(b.creator_side)} — ${fmt(b.creator_stake)} j.</span></div>
+          ${b.taker_id ? `<div class="side-row"><span class="lbl">${participantName(b.taker_id)} :</span><span>${escapeHtml(b.taker_side)} — ${fmt(takerStake)} j.</span></div>` : ''}
+        </div>
+        <div class="odds-badge">${b.cote}<small>cote</small></div>
+      </div>
+      <div class="t-actions">${actions}</div>
+    </div>`;
+  }).join('');
+}
+
+/* ---------- panel: à juger (jury) ---------- */
+function renderJury(){
+  const el = $('#panel-jury');
+  if (!me || !me.id){ el.innerHTML = `<div class="empty">Choisis d'abord ton pseudo en haut de page.</div>`; return; }
+  const myDuty = juryRows.filter(j=>j.juror_id===me.id);
+  if (!myDuty.length){ el.innerHTML = `<div class="empty">Tu n'es juré sur aucun dossier pour l'instant. Ça peut arriver à tout moment — trois noms sont tirés au sort à chaque demande de résolution.</div>`; return; }
+  el.innerHTML = myDuty.map(j=>{
+    const b = bets.find(x=>x.id===j.bet_id);
+    if (!b) return '';
+    const takerStake = b.taker_stake ?? takerStakeFor(b.creator_stake, b.cote);
+    if (j.voted_at){
+      return `
+      <div class="ticket">
+        <div class="t-head"><div class="desc">${escapeHtml(b.description)}</div><div class="status st-${b.status}">Voté</div></div>
+        <div class="t-meta">Tu as voté pour : ${j.vote === 'createur' ? escapeHtml(b.creator_side) : escapeHtml(b.taker_side)}</div>
+      </div>`;
+    }
+    return `
+    <div class="ticket">
+      <div class="t-head">
+        <div class="desc">${escapeHtml(b.description)}</div>
+        <div class="status st-a_juger">Tu es juré</div>
+      </div>
+      <div class="t-meta">Litige entre ${participantName(b.creator_id)} et ${participantName(b.taker_id)}</div>
+      <div class="perf"></div>
+      <div class="t-body">
+        <div class="sides">
+          <div class="side-row"><span class="lbl">${participantName(b.creator_id)} disait :</span><span>${escapeHtml(b.creator_side)}</span></div>
+          <div class="side-row"><span class="lbl">${participantName(b.taker_id)} disait :</span><span>${escapeHtml(b.taker_side)}</span></div>
+        </div>
+      </div>
+      <div class="t-actions">
+        <button class="btn full" onclick="voteJury('${j.id}','${b.id}','createur')">${escapeHtml(b.creator_side)}</button>
+        <button class="btn ghost full" onclick="voteJury('${j.id}','${b.id}','preneur')">${escapeHtml(b.taker_side)}</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ---------- panel: classement ---------- */
+function renderClassement(){
+  const el = $('#panel-classement');
+  if (!participants.length){ el.innerHTML = `<div class="empty">Personne n'a encore rejoint.</div>`; return; }
+  const sorted = [...participants].sort((a,b)=>b.balance-a.balance);
+  el.innerHTML = `<ul class="leaderboard">` + sorted.map((p,i)=>`
+    <li class="${me && p.id===me.id ? 'me' : ''}">
+      <span class="rank">${i+1}</span>
+      <span class="name">${escapeHtml(p.name)}</span>
+      <span class="bal">${fmt(p.balance)} j.</span>
+    </li>`).join('') + `</ul>`;
+}
+
+/* ---------- panel: nouveau pari ---------- */
+function renderNouveau(){
+  const el = $('#panel-nouveau');
+  if (!me || !me.id){ el.innerHTML = `<div class="empty">Choisis d'abord ton pseudo en haut de page pour proposer un pari.</div>`; return; }
+  el.innerHTML = `
+    <div class="form-card">
+      <h3>Proposer un pari</h3>
+      <div class="hint">Décris l'événement, choisis ton camp, fixe la cote pour celui qui te prend en face.</div>
+      <div class="field">
+        <label>La proposition</label>
+        <textarea id="f-desc" placeholder="Ex : Le PSG gagne la Ligue des Champions cette saison"></textarea>
+      </div>
+      <div class="field">
+        <label>Ton camp (ce que TU affirmes)</label>
+        <input id="f-creatorSide" placeholder="Ex : Non, ils se font sortir en quarts">
+      </div>
+      <div class="field">
+        <label>Camp adverse (ce que le preneur affirme)</label>
+        <input id="f-takerSide" placeholder="Ex : Oui, le PSG gagne la C1">
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label>Ta mise (jetons)</label>
+          <input id="f-stake" type="number" min="1" value="100">
+        </div>
+        <div class="field">
+          <label>Cote proposée</label>
+          <input id="f-cote" type="number" min="1.01" step="0.05" value="2">
+        </div>
+      </div>
+      <div class="preview-box" id="previewBox"></div>
+      <button class="btn full" style="margin-top:12px;" onclick="submitBet()">Publier le marché</button>
+    </div>
+  `;
+  ['f-stake','f-cote'].forEach(id=>{
+    $('#'+id).addEventListener('input', updatePreview);
+  });
+  updatePreview();
+}
+
+function updatePreview(){
+  const stake = parseInt($('#f-stake')?.value || 0);
+  const cote = parseFloat($('#f-cote')?.value || 0);
+  const box = $('#previewBox');
+  if (!box) return;
+  if (!stake || !cote || cote<=1){ box.textContent = "Renseigne une mise et une cote > 1 pour voir l'aperçu."; return; }
+  const takerStake = takerStakeFor(stake, cote);
+  box.innerHTML = `Le preneur devra engager <b>${fmt(takerStake)} jetons</b>. S'il gagne, il repart avec <b>${fmt(stake+takerStake)} jetons</b>. Si tu gagnes, tu repars avec <b>${fmt(stake+takerStake)} jetons</b>.`;
+}
+
+async function submitBet(){
+  const description = $('#f-desc').value.trim();
+  const creatorSide = $('#f-creatorSide').value.trim();
+  const takerSide = $('#f-takerSide').value.trim();
+  const stake = parseInt($('#f-stake').value);
+  const cote = parseFloat($('#f-cote').value);
+
+  if (!description || !creatorSide || !takerSide){ toast("Remplis la proposition et les deux camps."); return; }
+  if (!stake || stake<1){ toast("Mise invalide."); return; }
+  if (!cote || cote<=1){ toast("La cote doit être supérieure à 1."); return; }
+  const dispo = me.balance - engagedAmount(me.id);
+  if (stake > dispo){ toast(`Solde disponible insuffisant (${fmt(dispo)} jetons).`); return; }
+
+  const { error } = await sb.from('bets').insert({
+    description, creator_id: me.id, creator_side: creatorSide, taker_side: takerSide,
+    cote, creator_stake: stake, status: 'ouvert'
+  });
+  if (error){ toast("Erreur : " + error.message); return; }
+  toast("Marché publié !");
+  await refreshAll();
+  $$('#tabs button').forEach(b=>b.classList.remove('active'));
+  $(`[data-tab="ouverts"]`).classList.add('active');
+  $$('.panel').forEach(p=>p.classList.remove('active'));
+  $('#panel-ouverts').classList.add('active');
+}
+
+/* ---------- actions: prendre / valider / refuser / annuler ---------- */
+async function takeBet(betId){
+  const b = bets.find(x=>x.id===betId);
+  if (!b || !me) return;
+  const takerStake = takerStakeFor(b.creator_stake, b.cote);
+  const dispo = me.balance - engagedAmount(me.id);
+  if (takerStake > dispo){ toast(`Solde disponible insuffisant (${fmt(dispo)} jetons requis : ${fmt(takerStake)}).`); return; }
+  const deadline = new Date(Date.now() + 24*3600*1000).toISOString();
+  const { error } = await sb.from('bets').update({
+    taker_id: me.id, taker_stake: takerStake, status: 'attente_validation',
+    accept_deadline: deadline, taken_at: new Date().toISOString()
+  }).eq('id', betId);
+  if (error){ toast("Erreur : " + error.message); return; }
+  toast(`Pari pris ! ${participantName(b.creator_id)} a 24h pour se rétracter.`);
+  refreshAll();
+}
+
+async function cancelBet(betId){
+  await sb.from('bets').update({ status:'annule' }).eq('id', betId);
+  toast("Marché retiré.");
+  refreshAll();
+}
+
+async function validateBet(betId){
+  await sb.from('bets').update({ status:'verrouille' }).eq('id', betId);
+  toast("Pari verrouillé des deux côtés.");
+  refreshAll();
+}
+
+async function refuseBet(betId){
+  await sb.from('bets').update({ status:'refuse' }).eq('id', betId);
+  toast("Pari refusé, aucun jeton n'a bougé.");
+  refreshAll();
+}
+
+/* ---------- résolution & jury ---------- */
+async function requestResolution(betId){
+  const b = bets.find(x=>x.id===betId);
+  if (!b) return;
+  const pool = participants.filter(p=> p.id!==b.creator_id && p.id!==b.taker_id);
+  if (pool.length < 3){ toast("Pas assez de participants disponibles pour former un jury (il en faut 3 hors parieurs)."); return; }
+  const shuffled = [...pool].sort(()=>Math.random()-0.5).slice(0,3);
+  const { error: e1 } = await sb.from('bets').update({ status:'a_juger' }).eq('id', betId);
+  if (e1){ toast("Erreur : " + e1.message); return; }
+  const { error: e2 } = await sb.from('jury').insert(shuffled.map(p=>({ bet_id: betId, juror_id: p.id })));
+  if (e2){ toast("Erreur : " + e2.message); return; }
+  toast(`Jury tiré au sort : ${shuffled.map(p=>p.name).join(', ')}`);
+  refreshAll();
+}
+
+async function voteJury(jurorRowId, betId, choice){
+  const { error } = await sb.from('jury').update({ vote: choice, voted_at: new Date().toISOString() }).eq('id', jurorRowId);
+  if (error){ toast("Erreur : " + error.message); return; }
+  toast("Vote enregistré.");
+  await refreshAll();
+  await maybeResolveBet(betId);
+}
+
+async function maybeResolveBet(betId){
+  const { data: votes } = await sb.from('jury').select('*').eq('bet_id', betId);
+  const cast = (votes||[]).filter(v=>v.vote);
+  if (cast.length < 2) return; // pas encore de majorité possible
+  const countCreateur = cast.filter(v=>v.vote==='createur').length;
+  const countPreneur = cast.filter(v=>v.vote==='preneur').length;
+  if (countCreateur < 2 && countPreneur < 2) return; // pas de majorité encore
+
+  const b = bets.find(x=>x.id===betId) || (await sb.from('bets').select('*').eq('id',betId).single()).data;
+  if (!b || b.status === 'resolu') return;
+
+  const outcome = countCreateur >= 2 ? 'createur' : 'preneur';
+  const takerStake = b.taker_stake ?? takerStakeFor(b.creator_stake, b.cote);
+  const pot = b.creator_stake + takerStake;
+  const winnerId = outcome === 'createur' ? b.creator_id : b.taker_id;
+  const loserId = outcome === 'createur' ? b.taker_id : b.creator_id;
+  const winnerStake = outcome === 'createur' ? b.creator_stake : takerStake;
+
+  const netGainWinner = pot - winnerStake; // ce qu'il gagne en plus de sa propre mise récupérée
+  const winner = participants.find(p=>p.id===winnerId);
+  const loser = participants.find(p=>p.id===loserId);
+
+  await sb.from('participants').update({ balance: (winner?.balance||0) + netGainWinner }).eq('id', winnerId);
+  await sb.from('participants').update({ balance: (loser?.balance||0) - netGainWinner }).eq('id', loserId);
+
+  await sb.from('transactions').insert([
+    { participant_id: winnerId, amount: netGainWinner, reason: 'Gain de pari', bet_id: b.id },
+    { participant_id: loserId, amount: -netGainWinner, reason: 'Perte de pari', bet_id: b.id }
+  ]);
+
+  await sb.from('bets').update({ status:'resolu', resolution_outcome: outcome, resolved_at: new Date().toISOString() }).eq('id', b.id);
+
+  toast(`Marché résolu : ${outcome==='createur'?b.creator_side:b.taker_side}`);
+  refreshAll();
+}
+
+function escapeHtml(s){
+  return (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+</script>
+</body>
+</html>
